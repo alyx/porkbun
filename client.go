@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -184,6 +185,85 @@ func (c *Client) RetrieveSSLBundle(ctx context.Context, domain string) (SSLBundl
 
 	return bundleResp.SSLBundle, nil
 }
+
+// UpateDomainNameServers
+func (c *Client) UpdateDomainNameServers(ctx context.Context, domain string, nameServers []string) error {
+	endpoint := c.BaseURL.JoinPath("domain", "updateNs", domain)
+	apiReq := struct {
+		NameServers []string `json:"ns"`
+	}{
+		NameServers: nameServers,
+	}
+	respBody, err := c.do(ctx, endpoint, apiReq)
+	if err != nil {
+		return err
+	}
+	updateNameServersResp := Status{}
+	err = json.Unmarshal(respBody, &updateNameServersResp)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if updateNameServersResp.Status != statusSuccess {
+		return errors.New(updateNameServersResp.Error())
+	}
+
+	return nil
+}
+
+// GetDomainNameServers
+func (c *Client) GetDomainNameServers(ctx context.Context, domain string) ([]string, error) {
+	endpoint := c.BaseURL.JoinPath("domain", "getNs", domain)
+	respBody, err := c.do(ctx, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	getNameServersResp := getNameServersResponse{}
+	err = json.Unmarshal(respBody, &getNameServersResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if getNameServersResp.Status.Status != statusSuccess {
+		return nil, getNameServersResp.Status
+	}
+
+	return getNameServersResp.NameServers, nil
+}
+
+// ListDomains
+func (c *Client) ListDomains(ctx context.Context, start int, includeLabels string) ([]Domain, error) {
+	endpoint := c.BaseURL.JoinPath("domain", "listAll")
+	apiReq := struct {
+		Start         int
+		IncludeLabels string
+	}{
+		Start:         start,
+		IncludeLabels: includeLabels,
+	}
+	respBody, err := c.do(ctx, endpoint, apiReq)
+	if err != nil {
+		return nil, err
+	}
+	listDomainsResp := listDomainsResponse{}
+	//fmt.Println(string(respBody))
+	err = json.Unmarshal(respBody, &listDomainsResp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if listDomainsResp.Status.Status != statusSuccess {
+		return nil, listDomainsResp.Status
+	}
+
+	return listDomainsResp.Domains, nil
+}
+
+// AddDomainURLForward
+
+// GetDomainURLForward
+
+// DeleteDomainURLForward
 
 func (c *Client) do(ctx context.Context, endpoint *url.URL, apiRequest interface{}) ([]byte, error) {
 	request := authRequest{
